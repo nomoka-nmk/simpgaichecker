@@ -1,8 +1,8 @@
+#include <bits/stdc++.h>
 #include <chrono>
 #include <filesystem>
 #include <windows.h>
 #include <psapi.h>
-#include <bits/stdc++.h>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -488,32 +488,12 @@ void Judge(const fs::path& SUBMISSION_DIR, const fs::path& TESTCASES_DIR, const 
     }
 }
 
-void create_final_summary()
-{
-    ifstream inf(output_logs.string());
-    ofstream summary("final_result.json");
-
-    summary << "[\n";
-
-    string line;
-    while (getline(inf, line))
-    {
-        if (!line.empty())
-        {
-            summary << line << "\n";
-        }
-    }
-
-    summary << "]";
-
-    inf.close();
-    summary.close();
-}
-
 void generate_Html()
 {
     const fs::path json_file = fs::current_path() / "LOGS" / "output_logs.json";
     const fs::path html_file = fs::current_path() / "LOGS" / "results.html";
+
+    if (!fs::exists(json_file)) return;
 
     ifstream inf(json_file.string());
     json data;
@@ -747,8 +727,6 @@ void run_App()
     }
 
     if (fs::exists(WORK_DIR)) fs::remove_all(WORK_DIR);
-
-    create_final_summary();
 
     generate_Html();
 
