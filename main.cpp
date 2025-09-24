@@ -237,16 +237,36 @@ void build_Judge_Queue(queue<pair<int, int>> &judge_Queue, const vector<pair<int
 
 }
 
-int build_Execute(const fs::path& WORK_FILE, const fs::path& EXECUTE_FILE)
+int build_Execute(const fs::path& WORK_FILE, const fs::path& EXECUTE_FILE, const string& submission, const string& testcase)
 {
-
     const string build_Flag = "-std=c++14 -pipe -O2 -s -static -lm -x c++ -Wl,--stack,66060288";
     const string file_input = '"' + WORK_FILE.string() + '"';
     const string file_output = '"' + EXECUTE_FILE.string() + '"';
-    const string command = "g++ " + build_Flag + " " + file_input + " -o " + file_output;
+    const string command = "g++ " + build_Flag + " " + file_input + " -o " + file_output + " 2> build_log.txt";
 
-    return system(command.c_str());
+    int result = system(command.c_str());
 
+    string build_log_content;
+    ifstream log_file("build_log.txt");
+    if (log_file.is_open())
+    {
+        string line;
+        while (getline(log_file, line))
+        {
+            build_log_content += line + "\n";
+        }
+        log_file.close();
+    }
+
+    if (!build_log_content.empty() || result != 0)
+    {
+        write_To_output_logs(submission, testcase, build_log_content,
+                             "build", 0, 0, (result == 0) ? "Build Success" : "CE");
+    }
+
+    fs::remove("build_log.txt");
+
+    return result;
 }
 
 void generate_Config(const fs::path& CONFIGS_DIR, vector<pair<int, string>> &testcases)
@@ -426,10 +446,9 @@ void Judge(const fs::path& SUBMISSION_DIR, const fs::path& TESTCASES_DIR, const 
     fs::create_directory(WORK_DIR);
     fs::copy_file((SUBMISSION_DIR / submission), WORK_FILE);
 
-    if (build_Execute(WORK_FILE, EXECUTE_FILE) != 0)
+    if (build_Execute(WORK_FILE, EXECUTE_FILE, submission, testcase) != 0)
     {
-        write_To_output_logs(submission, testcase, "Build failed",
-                             "build", 0, 0, "CE");
+
         return;
     }
 
@@ -486,6 +505,23 @@ void Judge(const fs::path& SUBMISSION_DIR, const fs::path& TESTCASES_DIR, const 
         write_To_output_logs(submission, testcase, message_content,
                              i.filename().string(), time_used, memory_used, case_verdict);
     }
+}
+
+string formatBuildLog(const string& raw_log)
+{
+    stringstream result;
+    stringstream ss(raw_log);
+    string line;
+
+    while (getline(ss, line))
+    {
+        line = rtrim(line);
+        if (line.empty()) continue;
+
+        result << line << "\n";
+    }
+
+    return result.str();
 }
 
 void generate_Html()
@@ -635,24 +671,105 @@ void generate_Html()
             </div>
         </div>
 
+        <div class="mt-8 bg-white rounded-lg shadow overflow-hidden">
+            <div class="px-6 py-4 bg-gray-100 border-b">
+                <h2 class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-hammer mr-2"></i>Build Logs
+                </h2>
+            </div>
+            <div class="p-6">
+    )";
+
+    bool has_build_logs = false;
+    for (const auto& [testcase, entries] : data.items())
+    {
+        for (const auto& entry : entries)
+        {
+            if (entry["case"] == "build")
+            {
+                has_build_logs = true;
+                string verdict = entry["verdict"];
+                string verdict_class = (verdict == "Build Success") ? "verdict-ac" : "verdict-ce";
+                string verdict_text = (verdict == "Build Success") ? "Build Successful" : "Compilation Error";
+                string message = entry["message"];
+
+                html << R"(
+                <div class="mb-6 border rounded-lg overflow-hidden">
+                    <div class="px-4 py-3 )" << verdict_class << R"( border-b">
+                        <strong>)" << entry["submission"] << R"(</strong> - )" << entry["testcase"] << R"(
+                        <span class="float-right font-semibold">)" << verdict_text << R"(</span>
+                    </div>
+                    <div class="p-4 bg-gray-50">
+                )";
+
+                if (!message.empty())
+                {
+                    html << R"(<div class="build-log">)";
+
+                    stringstream ss(message);
+                    string line;
+                    while (getline(ss, line))
+                    {
+                        line = rtrim(line);
+
+                        if (line.empty()) continue;
+
+                        if (line.find("error:") != string::npos)
+                        {
+                            html << R"(<div class="text-red-400 mb-1">)" << line << R"(</div>)";
+                        }
+                        else if (line.find("warning:") != string::npos)
+                        {
+                            html << R"(<div class="text-yellow-400 mb-1">)" << line << R"(</div>)";
+                        }
+                        else if (line.find("note:") != string::npos)
+                        {
+                            html << R"(<div class="text-blue-400 mb-1">)" << line << R"(</div>)";
+                        }
+                        else if (line.find(".cpp:") != string::npos)
+                        {
+                            html << R"(<div class="text-green-400 mb-1">)" << line << R"(</div>)";
+                        }
+                        else if (line.find('^') != string::npos)
+                        {
+                            html << R"(<div class="text-cyan-400 mb-1">)" << line << R"(</div>)";
+                        }
+                        else
+                        {
+                            html << R"(<div class="text-gray-300 mb-1">)" << line << R"(</div>)";
+                        }
+                    }
+
+                    html << R"(</pre>)";
+                }
+                else
+                {
+                    html << R"(<p class="text-gray-500">No build messages</p>)";
+                }
+
+                html << R"(
+                    </div>
+                </div>
+                )";
+            }
+        }
+    }
+
+    if (!has_build_logs)
+    {
+        html << R"(<p class="text-gray-500 text-center py-4">No build logs available</p>)";
+    }
+
+    html << R"(
+            </div>
+        </div>
+
         <div class="mt-8 text-center text-gray-500 text-sm">
             <i class="fas fa-code mr-1"></i> Generated by Simp Gai Checker
             <i class="fas fa-heart mx-2 text-red-500"></i>
             With love for you
         </div>
     </div>
-
-    <script>
-        // Add some interactivity
-        document.addEventListener('DOMContentLoaded', function() {
-            const rows = document.querySelectorAll('tbody tr');
-            rows.forEach(row => {
-                row.addEventListener('click', function() {
-                    this.classList.toggle('bg-blue-50');
-                });
-            });
-        });
-    </script>
 </body>
 </html>
     )";
@@ -674,6 +791,13 @@ void run_App()
     const fs::path CONFIGS_DIR = fs::current_path() / "CONFIGS";
     const fs::path WORK_DIR = fs::current_path() / "WORK";
     const fs::path LOGS_DIR = fs::current_path() / "LOGS";
+
+    if (fs::exists(LOGS_DIR))
+    {
+
+        fs::remove_all(LOGS_DIR);
+
+    }
 
     if (!fs::exists(SUBMISSION_DIR))
     {
