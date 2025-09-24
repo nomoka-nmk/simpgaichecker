@@ -75,7 +75,7 @@ string compare_Files(const fs::path& output, const fs::path& answer) {
 
             if (expected != actual) {
 
-                return "WA: Difference at line " + to_string(lineNum) + " | Expected: [" + expected + "]" + " | Actual: [" + actual + "]";
+                return "WA: Difference at line " + to_string(lineNum) + " | Expected: [" + expected + "]" + " | Actual: [" += actual + "]";
 
             }
 
@@ -251,7 +251,7 @@ int execute_Submission(const fs::path& WORK_DIR, const fs::path& EXECUTE_FILE, i
         if (pi.hThread) CloseHandle(pi.hThread);
     };
 
-    auto start_time = std::chrono::high_resolution_clock::now();
+    const auto start_time = std::chrono::high_resolution_clock::now();
 
     if (!CreateProcessW(
         nullptr,
@@ -268,7 +268,6 @@ int execute_Submission(const fs::path& WORK_DIR, const fs::path& EXECUTE_FILE, i
 
     DWORD exitCode = STILL_ACTIVE;
     PROCESS_MEMORY_COUNTERS pmc;
-    bool time_limit_exceeded = false;
 
     while (true) {
         const DWORD waitResult = WaitForSingleObject(pi.hProcess, 10);
@@ -280,7 +279,6 @@ int execute_Submission(const fs::path& WORK_DIR, const fs::path& EXECUTE_FILE, i
         time_used = static_cast<int>(elapsed_ms);
 
         if (time_used > time_limit) {
-            time_limit_exceeded = true;
             cleanup();
             return 1;
         }
@@ -358,24 +356,24 @@ void Judge(const fs::path& SUBMISSION_DIR, const fs::path& TESTCASES_DIR, const 
         fs::copy_file(INPUT_TESTCASE_DIR, INPUT_WORK_DIR);
 
         int execute_Result = execute_Submission(WORK_DIR, EXECUTE_FILE, time_used, time_limit, memory_used, memory_limit);
-        string write_content;
+        string write_content = (i.filename().string()) + ": (" + to_string(time_used) + "/" + to_string(time_limit) + "|" + to_string(memory_used) + "/" + to_string(memory_limit) + "): ";
 
         if (execute_Result == 0) {
 
-            write_content = (i.filename().string()) + ": (" + to_string(time_used) + "/" + to_string(time_limit) + "|" + to_string(memory_used) + "/" + to_string(memory_limit) + "): " + compare_Files(OUTPUT_WORK_DIR, OUTPUT_TESTCASE_DIR);
+            write_content += compare_Files(OUTPUT_WORK_DIR, OUTPUT_TESTCASE_DIR);
         }
 
         else if (execute_Result == 1){
 
-            write_content = (i.filename().string()) + ": (" + to_string(time_used) + "/" + to_string(time_limit) + "|" + to_string(memory_used) + "/" + to_string(memory_limit) + "): TLE";
+            write_content += "TLE";
 
         } else if (execute_Result == 2) {
 
-            write_content = (i.filename().string()) + ": (" + to_string(time_used) + "/" + to_string(time_limit) + "|" + to_string(memory_used) + "/" + to_string(memory_limit) + "): MRE";
+            write_content += "MRE";
 
-        } else if (execute_Result == -1) {
+        } else {
 
-            write_content = (i.filename().string()) + ": (" + to_string(time_used) + "/" + to_string(time_limit) + "|" + to_string(memory_used) + "/" + to_string(memory_limit) + "): Error";
+            write_content += "Error";
 
         }
 
